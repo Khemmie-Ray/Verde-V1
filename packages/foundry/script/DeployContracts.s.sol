@@ -9,6 +9,7 @@ contract DeployContracts is Script {
     organisationFactory _organisationFactory;
 
     individual user1;
+
     individual[] users;
     address token;
 
