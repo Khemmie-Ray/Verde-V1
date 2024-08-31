@@ -10,4 +10,23 @@ library Event {
     event staffRemoved(uint no_of_staffs);
     event mentorsRemoved(uint no_of_staffs);
     event adminRemoved(uint no_of_admins);
+
+    event CampaignCreated(
+        string campaignName,
+        address superAdmin,
+        uint256 timestamp
+    );
+    event CampaignStopped(uint256 timestamp);
+    event FundsLocked(address user, uint256 amount);
+    event FundsPayout(address user, uint256 equalShare);
+    event AttendanceSigned(bytes Id, address signer);
+    event attendanceCreated(
+        bytes indexed lectureId,
+        string indexed uri,
+        string topic,
+        address indexed staff
+    );
+    event attendanceClosed(bytes Id, address mentor);
+    event topicEditted(bytes Id, string oldTopic, string newTopic);
+    event attendanceOpened(bytes Id, address mentor);
 }

@@ -7,4 +7,9 @@ contract Error {
     error not_a_super_admin();
     error not_valid_Staff();
     error user_already_registered();
+    error campaign_id_already_used();
+    error Attendance_compilation_started();
+    error Invalid_Lecture_Id();
+    error campaign_id_closed();
+    error Already_Signed_Attendance_For_Id();
 }

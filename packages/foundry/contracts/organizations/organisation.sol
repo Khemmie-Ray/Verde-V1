@@ -3,7 +3,7 @@ pragma solidity ^0.8.13;
 import "../../Interface/IFactory.sol";
 import "../../Library/Error.sol";
 import "../../Library/Event.sol";
-import "../IERC20.sol";
+import "../../Interface/INFT.sol";
 
 contract organisation {
     /**
@@ -15,12 +15,16 @@ contract organisation {
     string cohort;
     string public certiificateURI;
     address organisationFactory;
+    mapping(address => mapping(bytes => bool)) IndividualAttendanceRecord;
+    address[] public campaignAttendees;
+    mapping(bytes => mapping(address => bool)) campaignAttendance;
+
     address public NftContract;
+
     address public certificateContract;
     bool public certificateIssued;
     string public organisationImageUri;
     bool public isOngoing = true;
-    IERC20 token;
 
     address public spokContract;
     string public spokURI;
@@ -28,21 +32,22 @@ contract organisation {
     bool public spokMinted;
     mapping(address => bool) requestNameCorrection;
 
-    // campaign
-    string public campaign_name;
-    string public campaign_uri;
-    string public campaign_location;
-    string public campaign_description;
-    bool public isCampaignOn = true;
+    bool public isCampaignOn;
 
-    struct Campaign {
-        string campaign_name;
-        string campaign_uri;
-        string campaign_location;
-        string campaign_description;
-        address owner;
-    }
     Campaign[] public campaigns;
+
+    bytes[] campaignIdCollection;
+    mapping(bytes => lectureData) campaignInstance;
+    mapping(bytes => bool) campaignIdUsed;
+    struct lectureData {
+        address mentorOnDuty;
+        string topic;
+        string uri;
+        uint attendanceStartTime;
+        uint studentsPresent;
+        bool status;
+    }
+    mapping(address => bytes[]) campaignTopic;
 
     /**
      * ============================================================ *
@@ -52,7 +57,6 @@ contract organisation {
     address[] users;
     mapping(address => individual) userData;
     mapping(address => uint) indexInUsersArray;
-    mapping(address => uint) studentsTotalAttendance;
     mapping(address => bool) isUser;
     mapping(address => bytes[]) classesAttended;
 
@@ -100,8 +104,8 @@ contract organisation {
         _;
     }
 
-    modifier onlyStaffs() {
-        require(isUser[msg.sender] == true, "NOT A VALID STAFF");
+    modifier onlyUser() {
+        require(isUser[msg.sender] == true, "NOT A VALID USER");
         _;
     }
     modifier onlySuperAdminOrAdmins() {
@@ -122,14 +126,11 @@ contract organisation {
     }
 
     constructor(
-        address _token,
         string memory _organization_name,
         address _super_admin,
         string memory _admin_name,
         string memory _uri
     ) {
-        IERC20 _token_instance = IERC20(_token);
-        token = _token_instance;
         super_admin = _super_admin;
         organization = _organization_name;
         organisationFactory = msg.sender;
@@ -141,6 +142,12 @@ contract organisation {
         staffs_data[_super_admin]._address = _super_admin;
         staffs_data[_super_admin]._name = _admin_name;
         organisationImageUri = _uri;
+    }
+
+    function initialize(address _NftContract) external {
+        if (msg.sender != organisationFactory)
+            revert Error.not_Autorized_Caller();
+        NftContract = _NftContract;
     }
 
     function registerStaffs(
@@ -181,6 +188,102 @@ contract organisation {
         super_admin = newModerator;
     }
 
+    function createAttendance(
+        bytes calldata _lectureId,
+        string calldata _uri,
+        string calldata _topic
+    ) external onlySuperAdmin {
+        if (campaignIdUsed[_lectureId] == true)
+            revert Error.campaign_id_already_used();
+        campaignIdUsed[_lectureId] = true;
+        campaignIdCollection.push(_lectureId);
+        campaignInstance[_lectureId].uri = _uri;
+        campaignInstance[_lectureId].topic = _topic;
+        campaignInstance[_lectureId].mentorOnDuty = msg.sender;
+        campaignTopic[msg.sender].push(_lectureId);
+
+        INFT(NftContract).setDayUri(_lectureId, _uri);
+        emit Event.attendanceCreated(_lectureId, _uri, _topic, msg.sender);
+    }
+
+    function openAttendance(bytes calldata _lectureId) external onlySuperAdmin {
+        if (campaignIdUsed[_lectureId] == false)
+            revert Error.Invalid_Lecture_Id();
+        if (campaignInstance[_lectureId].status == true)
+            revert("Attendance already open");
+        if (msg.sender != campaignInstance[_lectureId].mentorOnDuty)
+            revert Error.not_Autorized_Caller();
+
+        campaignInstance[_lectureId].status = true;
+        emit Event.attendanceOpened(_lectureId, msg.sender);
+    }
+
+    function closeAttendance(
+        bytes calldata _lectureId
+    ) external onlySuperAdmin {
+        if (campaignIdUsed[_lectureId] == false)
+            revert Error.Invalid_Lecture_Id();
+        if (campaignInstance[_lectureId].status == false)
+            revert("Attendance already closed");
+        if (msg.sender != campaignInstance[_lectureId].mentorOnDuty)
+            revert Error.not_Autorized_Caller();
+
+        campaignInstance[_lectureId].status = false;
+        emit Event.attendanceClosed(_lectureId, msg.sender);
+    }
+
+    function editTopic(
+        bytes memory _lectureId,
+        string calldata _topic
+    ) external {
+        if (msg.sender != campaignInstance[_lectureId].mentorOnDuty)
+            revert Error.not_Autorized_Caller();
+        if (campaignInstance[_lectureId].attendanceStartTime != 0)
+            revert Error.Attendance_compilation_started();
+        string memory oldTopic = campaignInstance[_lectureId].topic;
+        campaignInstance[_lectureId].topic = _topic;
+        emit Event.topicEditted(_lectureId, oldTopic, _topic);
+    }
+
+    function signAttendance(bytes memory _lectureId) external onlyUser {
+        if (campaignIdUsed[_lectureId] == false)
+            revert Error.Invalid_Lecture_Id();
+        if (campaignInstance[_lectureId].status == false)
+            revert Error.campaign_id_closed();
+        if (IndividualAttendanceRecord[msg.sender][_lectureId] == true)
+            revert Error.Already_Signed_Attendance_For_Id();
+        if (campaignInstance[_lectureId].attendanceStartTime == 0) {
+            campaignInstance[_lectureId].attendanceStartTime = block.timestamp;
+        }
+        IndividualAttendanceRecord[msg.sender][_lectureId] = true;
+
+        campaignInstance[_lectureId].studentsPresent =
+            campaignInstance[_lectureId].studentsPresent +
+            1;
+        classesAttended[msg.sender].push(_lectureId);
+
+        INFT(NftContract).mint(msg.sender, _lectureId, 1);
+        emit Event.AttendanceSigned(_lectureId, msg.sender);
+    }
+
+    function getCampaignAttendance(
+        bytes memory _lectureId
+    ) external view returns (address[] memory) {
+        address[] memory attendees = new address[](campaignAttendees.length);
+        uint256 index = 0;
+        for (uint256 i = 0; i < campaignAttendees.length; i++) {
+            if (campaignAttendance[_lectureId][campaignAttendees[i]] == true) {
+                attendees[index] = campaignAttendees[i];
+                index++;
+            }
+        }
+        address[] memory trimmedAttendees = new address[](index);
+        for (uint256 i = 0; i < index; i++) {
+            trimmedAttendees[i] = attendees[i];
+        }
+        return trimmedAttendees;
+    }
+
     function createCampaign(
         string memory _campaign_name,
         string memory _uri,
@@ -188,6 +291,7 @@ contract organisation {
         string memory _location,
         string memory _description
     ) external onlySuperAdmin {
+        isCampaignOn = true;
         Campaign memory newCampaign = Campaign(
             _campaign_name,
             _uri,
@@ -196,6 +300,15 @@ contract organisation {
             _super_admin
         );
         campaigns.push(newCampaign);
+        emit Event.CampaignCreated(
+            _campaign_name,
+            _super_admin,
+            block.timestamp
+        );
+    }
+
+    function getCampaigns() external view returns (Campaign[] memory) {
+        return campaigns;
     }
 
     function registerUsers(
@@ -337,23 +450,22 @@ contract organisation {
         return organization;
     }
 
-    function getCohortName() external view returns (string memory) {
-        return cohort;
-    }
-
     function getOrganisationImageUri() external view returns (string memory) {
         return organisationImageUri;
     }
 
-    function toggleOrganizationStatus() external {
-        isCampaignOn = !isCampaignOn;
+    function toggleOrganizationStatus() external onlySuperAdmin {
+        isOngoing = !isOngoing;
     }
 
-    function toggleCampaignStatus() external {
+    function toggleCampaignStatus() external onlySuperAdmin {
+        require(isCampaignOn == true, "Campaign is already stopped");
+
         isCampaignOn = !isCampaignOn;
+        emit Event.CampaignStopped(block.timestamp);
     }
 
     function getOrganizationStatus() external view returns (bool) {
-        return isCampaignOn;
+        return isOngoing;
     }
 }

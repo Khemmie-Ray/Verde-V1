@@ -5,10 +5,12 @@ import "forge-std/Test.sol";
 import "../Interface/Ichild.sol";
 import "../Interface/IFactory.sol";
 import "../contracts/organizations/organisationFactory.sol";
+import "../contracts/organizations/organisation.sol";
+import "../contracts/reward/RewardFactory.sol";
 
 contract EcosystemTest is Test {
     organisationFactory _organisationFactory;
-
+    RewardFactory _rewardFactory;
     individual user1;
     individual[] users;
     individual[] editstudents;
@@ -17,6 +19,9 @@ contract EcosystemTest is Test {
     individual[] staffs;
     individual[] editStaffs;
 
+    Campaign campaign;
+    Campaign[] campaigns;
+
     address[] staffsToRemove;
     address[] rogue_staffs;
     address[] nameCheck;
@@ -24,7 +29,6 @@ contract EcosystemTest is Test {
     address userAdd = 0x13B109506Ab1b120C82D0d342c5E64401a5B6381;
     address director = 0xA771E1625DD4FAa2Ff0a41FA119Eb9644c9A46C8;
     address public organisationAddress;
-    address public token;
 
     individual admin;
     address[] adminsToRemove;
@@ -32,24 +36,27 @@ contract EcosystemTest is Test {
 
     function setUp() public {
         vm.prank(director);
-        _organisationFactory = new organisationFactory();
+        _rewardFactory = new RewardFactory();
+
+        _organisationFactory = new organisationFactory(address(_rewardFactory));
+
+        vm.stopPrank();
+
         user1._address = address(userAdd);
         user1._name = "JOHN DOE";
+        user1.email = "qO2kF@example.com";
         users.push(user1);
 
         staff._address = address(staffAdd);
         staff._name = "MR. ABIMS";
+        staff.email = "abims@abims.com";
         staffs.push(staff);
     }
 
     function testOrganizationCreation() public {
         vm.startPrank(director);
-        address Organisation = _organisationFactory.createorganisation(
-            token,
-            "WEB3BRIDGE",
-            "http://test.org",
-            "Abims"
-        );
+        (address Organisation, address OrganisationNft) = _organisationFactory
+            .createorganisation("WEB3BRIDGE", "http://test.org", "Abims");
         address child = _organisationFactory.getUserOrganisatons(director)[0];
 
         bool status = ICHILD(child).getOrganizationStatus();
@@ -102,6 +109,7 @@ contract EcosystemTest is Test {
 
     function testToggleOrganizationStatus() public {
         testOrganizationCreation();
+        vm.startPrank(director);
         address child = _organisationFactory.getUserOrganisatons(director)[0];
 
         ICHILD(child).toggleOrganizationStatus();
@@ -113,10 +121,12 @@ contract EcosystemTest is Test {
 
         bool finalStatus = ICHILD(child).getOrganizationStatus();
         assertEq(finalStatus, true);
+        vm.stopPrank();
     }
 
     function testToggleCampaignStatus() public {
         testOrganizationCreation();
+        vm.startPrank(director);
         address child = _organisationFactory.getUserOrganisatons(director)[0];
 
         ICHILD(child).toggleOrganizationStatus();
@@ -128,6 +138,7 @@ contract EcosystemTest is Test {
 
         bool finalStatus = ICHILD(child).getOrganizationStatus();
         assertEq(finalStatus, true);
+        vm.stopPrank();
     }
 
     function testPromoteStaff() public {
@@ -151,5 +162,56 @@ contract EcosystemTest is Test {
         vm.startPrank(director);
         address child = _organisationFactory.getUserOrganisatons(director)[0];
         ICHILD(child).removeStaff(staffsToRemove);
+    }
+
+    // campaigns
+    function testCreateCampaigns() public {
+        testOrganizationCreation();
+        vm.startPrank(director);
+        address child = _organisationFactory.getUserOrganisatons(director)[0];
+        ICHILD(child).createCampaign(
+            "Fight political corruption",
+            "https://accessess.org",
+            director,
+            "London",
+            "description"
+        );
+        vm.stopPrank();
+    }
+
+    function testCreateAttendance() public {
+        testOrganizationCreation();
+        vm.startPrank(director);
+        address child = _organisationFactory.getUserOrganisatons(director)[0];
+
+        ICHILD(child).createAttendance(
+            "B0202",
+            "http://test.org",
+            "INTRODUCTION TO BLOCKCHAIN"
+        );
+
+        vm.stopPrank();
+    }
+
+    function testSignAttendance() public {
+        testCreateAttendance();
+        testUserRegister();
+
+        vm.startPrank(director);
+        address child = _organisationFactory.getUserOrganisatons(director)[0];
+        ICHILD(child).openAttendance("B0202");
+        vm.stopPrank();
+
+        vm.startPrank(userAdd);
+        ICHILD(child).signAttendance("B0202");
+        vm.stopPrank();
+    }
+
+    function testGetCampaignAttendance() public {
+        testSignAttendance();
+        vm.startPrank(director);
+        address child = _organisationFactory.getUserOrganisatons(director)[0];
+        ICHILD(child).getCampaignAttendance("B0202");
+        vm.stopPrank();
     }
 }

@@ -4,9 +4,11 @@ pragma solidity ^0.8.13;
 import "../lib/forge-std/src/Script.sol";
 import "../contracts/organizations/organisationFactory.sol";
 import "../Interface/Ichild.sol";
+import "../contracts/reward/RewardFactory.sol";
 
 contract DeployContracts is Script {
     organisationFactory _organisationFactory;
+    RewardFactory _rewardFactory;
 
     individual user1;
 
@@ -19,13 +21,9 @@ contract DeployContracts is Script {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
 
-        _organisationFactory = new organisationFactory();
-        address Organisation = _organisationFactory.createorganisation(
-            token,
-            "vermion",
-            "http://test.org",
-            "dickson"
-        );
+        _organisationFactory = new organisationFactory(address(_rewardFactory));
+        (address Organisation, address OrganisationNft) = _organisationFactory
+            .createorganisation("vermion", "http://test.org", "dickson");
 
         vm.stopBroadcast();
         writeAddressesToFile(

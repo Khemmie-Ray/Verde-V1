@@ -5,6 +5,26 @@ import "../Interface/IFactory.sol";
 interface ICHILD {
     function userCampaignReg(string memory _name) external;
 
+    function createAttendance(
+        bytes calldata _lectureId,
+        string calldata _uri,
+        string calldata _topic
+    ) external;
+
+    function openAttendance(bytes calldata _lectureId) external;
+
+    function signAttendance(bytes memory _lectureId) external;
+
+    function getCampaignAttendance(
+        bytes memory _lectureId
+    ) external view returns (address[] memory);
+
+    function getCampaigns() external view returns (Campaign[] memory);
+
+    function approve(address spender, uint256 value) external returns (bool);
+
+    function lockFunds(uint256 amount) external;
+
     function createCampaign(
         string memory _campaign_name,
         string memory _uri,

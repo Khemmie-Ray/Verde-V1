@@ -2,10 +2,12 @@
 pragma solidity ^0.8.9;
 
 import "./organisation.sol";
+import "../../Interface/IREWARD.sol";
 
 contract organisationFactory {
     address public Admin;
     address organisationAdmin;
+    address rewardFactory;
     address[] public Organisations;
     mapping(address => bool) public validOrganisation;
 
@@ -15,19 +17,18 @@ contract organisationFactory {
     mapping(address => bool) public uniqueStudent;
     uint public totalUsers;
 
-    constructor() {
+    constructor(address _rewardFactory) {
         Admin = msg.sender;
+        rewardFactory = _rewardFactory;
     }
 
     function createorganisation(
-        address _token,
         string memory _organisation,
         string memory _uri,
         string memory _adminName
-    ) external returns (address Organisation) {
+    ) external returns (address Organisation, address Nft) {
         organisationAdmin = msg.sender;
         organisation OrganisationAddress = new organisation(
-            _token,
             _organisation,
             organisationAdmin,
             _adminName,
@@ -35,7 +36,13 @@ contract organisationFactory {
         );
         Organisations.push(address(OrganisationAddress));
         validOrganisation[address(OrganisationAddress)] = true;
-
+        address AttendanceAddr = IREWARDFactory(rewardFactory).completePackage(
+            _organisation,
+            _adminName,
+            _uri,
+            address(OrganisationAddress)
+        );
+        OrganisationAddress.initialize(address(AttendanceAddr));
         uint orgLength = memberOrganisations[msg.sender].length;
         studentOrganisationIndex[msg.sender][
             address(OrganisationAddress)
