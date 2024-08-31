@@ -31,6 +31,7 @@ contract DeployContracts is Script {
             "Organisation Factory"
         );
         writeAddressesToFile(Organisation, "Organisation Address");
+        writeAddressesToFile(OrganisationNft, "Organisation NFT Address");
     }
 
     function writeAddressesToFile(address addr, string memory text) public {
